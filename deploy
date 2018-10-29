@@ -1,0 +1,41 @@
+#!/bin/bash
+
+ASTERIXDB="apache-asterixdb-0.9.5-SNAPSHOT"
+HOME="/Users/Sandra/Desktop/NTNU/Prosjektoppgave"
+
+echo "[🛑] Stop asterixdb"
+sh $HOME/$ASTERIXDB/opt/local/bin/stop-sample-cluster.sh
+
+echo "[☠️] Delete asterixdb folder"
+rm -rf $HOME/$ASTERIXDB
+
+echo "[©️] Copy from asterix repo"
+cp -R /Users/Sandra/Code/asterixdb/asterixdb/asterix-server/target/asterix-server-0.9.5-SNAPSHOT-binary-assembly/$ASTERIXDB /Users/Sandra/Desktop/NTNU/Prosjektoppgave/
+
+echo "[🏃🏼‍♂️] Start asterixdb"
+sh $HOME/$ASTERIXDB/opt/local/bin/start-sample-cluster.sh
+
+echo "[🌏] Run dataverse query"
+curl -v --data-urlencode "statement=create dataverse feeds; use feeds; CREATE TYPE TweetType AS OPEN { id: int32, text: string }; CREATE TYPE TweetRelevantType AS CLOSED { relevant: boolean, id: int32, text: string }; CREATE DATASET RelevantDataset(TweetRelevantType) PRIMARY KEY id; CREATE feed TestSocketFeed WITH { \"adapter-name\": \"socket_adapter\", \"sockets\": \"127.0.0.1:10001\", \"address-type\": \"IP\", \"type-name\": \"TweetType\", \"format\": \"adm\" }" \
+http://localhost:19002/query/service
+
+echo "[🛑] Stop asterixdb"
+sh $HOME/$ASTERIXDB/opt/local/bin/stop-sample-cluster.sh
+
+echo "[📁] Create folder udfs/feeds/testlib/"
+mkdir -p $HOME/$ASTERIXDB/lib/udfs/feeds/testlib
+
+echo "[👷🏼‍♂️] Build library"
+cd /Users/Sandra/Code/asterix-udf-template
+mvn clean install
+
+echo "[📂] Unzip assembly"
+cd target
+unzip asterix-udf-template-0.1-SNAPSHOT-testlib.zip -d $HOME/$ASTERIXDB/lib/udfs/feeds/testlib/
+
+echo "[🏃🏼‍♂️] Start asterixdb"
+sh $HOME/$ASTERIXDB/opt/local/bin/start-sample-cluster.sh
+
+echo "[❓] Run query"
+curl -v --data-urlencode "statement=use feeds; CONNECT FEED TestSocketFeed TO DATASET RelevantDataset APPLY function testlib#detectRelevance; start feed TestSocketFeed" \
+http://localhost:19002/query/service
